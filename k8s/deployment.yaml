@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: deliverygo-frontend, namespace: deliverygo, labels: {app: deliverygo-frontend}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: deliverygo-frontend}}
+  template:
+    metadata: {labels: {app: deliverygo-frontend}}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 101, runAsGroup: 101, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: frontend
+          image: ACCOUNT.dkr.ecr.us-east-2.amazonaws.com/deliverygo-frontend:IMAGE_TAG
+          ports: [{name: http, containerPort: 8080}]
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {cpu: 300m, memory: 128Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: cache, mountPath: /var/cache/nginx}, {name: run, mountPath: /var/run}]
+          readinessProbe: {httpGet: {path: /health/live, port: http}, initialDelaySeconds: 3, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health/live, port: http}, initialDelaySeconds: 10, periodSeconds: 20}
+      volumes: [{name: cache, emptyDir: {}}, {name: run, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: deliverygo-frontend, namespace: deliverygo}
+spec: {selector: {app: deliverygo-frontend}, ports: [{port: 80, targetPort: http}], type: ClusterIP}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: deliverygo-frontend, namespace: deliverygo}
+data: {note: "VITE API URLs are embedded at image build time; set RESTAURANT_API_URL and MENU_API_URL in the frontend build workflow."}
