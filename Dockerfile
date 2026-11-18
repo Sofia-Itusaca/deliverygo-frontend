@@ -7,7 +7,7 @@ ARG VITE_RESTAURANT_API_URL=http://localhost:8081
 ARG VITE_MENU_API_URL=http://localhost:8082
 ENV VITE_RESTAURANT_API_URL=$VITE_RESTAURANT_API_URL VITE_MENU_API_URL=$VITE_MENU_API_URL
 RUN npm run build
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginx/nginx-unprivileged:1.31.8-alpine3.24
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
