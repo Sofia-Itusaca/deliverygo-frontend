@@ -186,3 +186,24 @@ La auditoría de producción no reporta vulnerabilidades, pero la auditoría com
 - Resultado de npm ls picomatch.
 - Pruebas preliminares del parche comunitario.
 - Historial de modificaciones de Git.
+
+## 13. Estado del gate CI (2026-11-18)
+
+La auditoría completa `npm audit --audit-level=high` es bloqueante en GitHub Actions. En Node 22/npm 10.9.9, `npm audit --json` termina con exit code 1 y contabiliza cinco findings HIGH: un solo GHSA de picomatch repetido en la cadena `picomatch` → `fdir`/`tinyglobby` → `vite`/`vitest`. El contenedor de CI conserva el hallazgo aunque `npm ci` termine correctamente.
+
+En el entorno anfitrión Node 24.21.0/npm 11.19.0, `npm audit --json` devuelve exit code 0 y vulnerabilidades vacías con el mismo lockfile. Ese resultado discrepa del entorno Node 22 usado por CI y no sirve para considerar resuelto el advisory. La ficha oficial GHSA-fc5q-39xc-vjpf sigue indicando versiones afectadas hasta 4.0.7 y ninguna versión corregida: https://github.com/advisories/GHSA-fc5q-39xc-vjpf.
+
+El override apunta al commit `1bf0d04563cb9ce568cf36efc5f6b7187d9911d5` del fork seeibt, que corresponde a la propuesta upstream #237, todavía abierta: https://github.com/micromatch/picomatch/pull/237. La propuesta mitiga el patrón `+(*a)` observado y la prueba de regresión local comprueba el regex compilado y el matching con límite de tiempo. Esto no equivale a un release oficial ni elimina los cinco findings del audit del contenedor.
+
+**Estado:** FAIL/BLOCKED para el gate completo de dependencias; no declarar el frontend listo mientras Node 22/npm 10.9.9 reporte esos cinco HIGH. La suite de pruebas y el build sí pasaron por separado. No se ejecutó ningún workflow remoto.
+
+## 14. Decisión de mitigación y clasificación (2026-11-17)
+
+Se compararon las alternativas locales en `docs/picomatch-redos-decision.md` (documento transversal del Harness). `vite@6.2.7` sería un downgrade dentro de major 6; `vitest@3.1.4` sería un downgrade mayor de 5 a 3. El ensayo del árbol alternativo dejó siete hallazgos, incluidos dos CRITICAL. Se descartó sustituir picomatch por otra API, añadir patch-package, mantener un parche propio en postinstall, un script ad hoc fuera de Vitest y controles de entrada de la aplicación (el producto no pasa patrones de usuarios a picomatch). Una evaluación temporal aislada de `patch-package@8.0.1` observó 55 entradas nuevas de lock y 14 dependencias directas listadas en el árbol de la herramienta; no se aplicó al lockfile de DeliveryGo. Si se adoptara, DeliveryGo agregaría `patch-package` como una dependencia directa; el audit del ensayo siguió con los mismos cinco HIGH.
+
+La decisión local es mantener el único override existente fijado por hash al commit seeibt `1bf0d04563cb9ce568cf36efc5f6b7187d9911d5`, correspondiente a la PR abierta #237. No se ocultan findings con allowlists, exclusions ni un umbral menor. La suite Vitest prueba `+(*a)`, `+(*)`, `*(*a)` y `+(a*b)` con casos positivos/negativos y no-matches adversariales limitados a cinco segundos. Es evidencia de mitigación para esos patrones concretos, no prueba de seguridad universal ni corrección oficial.
+
+- **Hallazgos corregidos upstream:** 0.
+- **Mitigación demostrada:** patrones específicos cubiertos por la regresión sobre el commit hash-pinned.
+- **Pendientes:** 5 HIGH de GHSA-fc5q-39xc-vjpf en Node 22/npm 10.9.9, hasta un release oficial corregido o actualización del advisory y una nueva auditoría limpia.
+- **Resultado:** FAIL/BLOCKED; no considerar el proyecto listo. El audit Node 24/npm 11.19.0 que devuelve 0 no sustituye el resultado del entorno CI.
